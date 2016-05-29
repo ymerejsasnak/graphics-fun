@@ -26,12 +26,12 @@ MIN_SIZE = 10
 MAX_SIZE_RANGE = 10
 
 # for circles
-MAX_RADIUS = 30
+MAX_RADIUS = 20
 RADIUS_VARIATION = 10
-SHRINK_RATE = .1
+SHRINK_RATE = .05
 PULSE_MEDIAN = .5
 BURST_RANGE = 40
-
+MAX_CHILDREN = 10
 
 # for all objects
 MAX_DRIFT_RANGE = 10
@@ -58,8 +58,8 @@ class Square:
         self.size = r.randint(MIN_SIZE, MAX_SIZE)
         
         self.red = r.randint(150, 200)
-        self.green = r.randint(20, 50)
-        self.blue = r.randint(20,45)
+        self.green = r.randint(20, 100)
+        # blue determined by red (255 - red)
         self.red_change = COLOR_CHANGE
         
         self.alive = True # unused...just here so this and circles can be in same objects list
@@ -102,7 +102,7 @@ class Square:
         # x y is center of rect in this object so...
         x = self.x - self.size // 2
         y = self.y - self.size // 2
-        pygame.draw.rect(surface, (self.red, self.green, self.blue), (x, y, self.size, self.size))
+        pygame.draw.rect(surface, (self.red, self.green, 255 - self.red), (x, y, self.size, self.size))
     
     # draw shadows seperately so shadows aren't drawn on other objects
     def draw_shadow(self, surface):
@@ -114,8 +114,8 @@ class Square:
 
 class Circle():
     
-    def __init__(self):
-        self.x, self.y = pygame.mouse.get_pos()
+    def __init__(self, xy_pos, child=False):
+        self.x, self.y = xy_pos
         self.direction = r.randrange(360)
         self.drift_range = r.randrange(MAX_DRIFT_RANGE * 2)
         self.speed = r.uniform(MIN_SPEED, MAX_SPEED * 1.5)
@@ -129,9 +129,10 @@ class Circle():
         self.red = r.randint(15, 20)
         self.green = r.randint(100, 250)
         self.blue = r.randint(50, 100)
-        self.color_change = COLOR_CHANGE / 2
+        self.color_change = COLOR_CHANGE / 3
         
         self.alive = True
+        self.child = child
     
     def update(self, flag):
         # move and drift
@@ -158,10 +159,20 @@ class Circle():
             self.green = max(self.green - self.color_change, 0)
             self.blue = max(self.blue - self.color_change, 0)
             
-            # kill if black
-            if self.red + self.green + self.blue == 0:
+            # kill if black and tiny and make children if not a child itself
+            if self.red + self.green + self.blue == 0 and self.radius == 2:
                 self.alive = False
-                return []
+                if not self.child:
+                    new_circles = []
+                    for i in range(r.randint(2, MAX_CHILDREN)):
+                        x = self.x + r.randint(int(-self.radius), int(self.radius))
+                        y = self.y + r.randint(int(-self.radius), int(self.radius))
+                        if i == 0:
+                            child = False # one will be a parent for next burst
+                        else:
+                            child = True
+                        new_circles.append(Circle((x, y), child))
+                    return new_circles
         # else just pulsate a bit:
         else:
             self.radius = max(self.radius + self.pulse, 2)
@@ -227,7 +238,7 @@ def run():
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 objects.append(Square())
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
-                objects.append(Circle())
+                objects.append(Circle(pygame.mouse.get_pos()))
             
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 change_flag = not change_flag
